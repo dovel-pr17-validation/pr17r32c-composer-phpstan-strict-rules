@@ -1,0 +1,113 @@
+# Configuration from:
+# https://github.com/johnbillion/plugin-infrastructure/blob/571cba96190304963285181e2b928d941b9ec7c4/.github/workflows/reusable-workflow-lint.yml
+
+name: Lint GitHub Actions workflows
+on:
+  pull_request:
+  push:
+    branches:
+      - "2.1.x"
+
+permissions: {}
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check workflow files
+        run: |
+          echo "::add-matcher::.github/actionlint-matcher.json"
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+        shell: bash
+
+  octoscan:
+    name: Octoscan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required for codeql-action/upload-sarif to upload SARIF files.
+    timeout-minutes: 10
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run octoscan
+        id: octoscan
+        uses: synacktiv/action-octoscan@6b1cf2343893dfb9e5f75652388bd2dc83f456b0 # v1.0.0
+        with:
+          filter_triggers: ''
+
+      - name: Upload SARIF file to GitHub
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: "${{steps.octoscan.outputs.sarif_output}}"
+          category: octoscan
+          wait-for-processing: false
+
+  poutine:
+    name: Poutine
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required for codeql-action/upload-sarif to upload SARIF files.
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Poutine
+        uses: boostsecurityio/poutine-action@e240ebd3eff8b2db5a8e5f6b28f58739d7db2247 # v1.1.4
+
+      - name: Upload poutine SARIF file
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: results.sarif
+          category: poutine
+          wait-for-processing: false
+
+  zizmor:
+    name: Zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required for codeql-action/upload-sarif to upload SARIF files.
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: false
+
+      - name: Run zizmor
+        run: uvx zizmor@1.31.1 --persona=auditor --format=sarif --strict-collection . > results.sarif
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: results.sarif
+          category: zizmor
+          wait-for-processing: false

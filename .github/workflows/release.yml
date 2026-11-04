@@ -1,0 +1,36 @@
+# https://help.github.com/en/categories/automating-your-workflow-with-github-actions
+
+name: "Create release"
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  deploy:
+    name: "Deploy"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: "Checkout"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate changelog
+        id: changelog
+        uses: metcalfc/changelog-generator@bb7a08e07e326061351dab6ce89c72f13797043c # v4.9.1
+        with:
+          myToken: ${{ secrets.PHPSTAN_BOT_TOKEN }}
+
+      - name: "Create release"
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          token: ${{ secrets.PHPSTAN_BOT_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.changelog }}
